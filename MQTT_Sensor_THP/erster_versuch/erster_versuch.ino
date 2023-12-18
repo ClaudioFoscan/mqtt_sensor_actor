@@ -1,9 +1,7 @@
-// This example uses an ESP32 Development Board
-// to connect to shiftr.io.
-//
-// You can check on your device after a successful
-// connection here: https://www.shiftr.io/try.
-//
+// MQTT-Sensor-Actor Example
+// by Claudio Foscan
+
+// MQTT-Library
 // by Joël Gähwiler
 // https://github.com/256dpi/arduino-mqtt
 
@@ -12,21 +10,21 @@
 #include <AHT20.h>
 #include <BMP280_DEV.h>                           // Include the BMP280_DEV.h library
 
+AHT20 aht20;     
+BMP280_DEV bmp280(Wire); 
+WiFiClient net;
+MQTTClient client;
+
 float temperature_lres, pressure, altitude;            // Create the temperature, pressure and altitude variables
 float temperature_hres;
 float humidity_hres;
 uint8_t aht20Flag = 0;
 uint8_t bmp280Flag = 0;
 
-AHT20 aht20;     
-BMP280_DEV bmp280(Wire); 
-const char ssid[] = "Dartmoor_Casa";
-const char pass[] = "SumpfSchlumpf2022";
-
-char mqttTopic[256] = "/casa/keller/weinkeller";
-
-WiFiClient net;
-MQTTClient client;
+const char ssid[] = "***";                              // add your WiFi-SSID here
+const char pass[] = "***";                              // add your WiFi-Password here
+const char mqttBroker[] = "192.168.1.30"                // add the Adress of your MQTT-Broker here
+const char mqttTopic[256] = "/casa/keller/weinkeller";  // add your Topic/Topics here
 
 unsigned long lastMillis = 0;
 
@@ -64,7 +62,7 @@ void setup() {
 
   // Note: Local domain names (e.g. "Computer.local" on OSX) are not supported
   // by Arduino. You need to set the IP address directly.
-  client.begin("192.168.1.30", net);
+  client.begin(mqttBroker, net);
   client.onMessage(messageReceived);
 
   connect();
@@ -85,7 +83,6 @@ void setup() {
   //bmp280.setIIRFilter(IIR_FILTER_4);              // Set the IIR filter to setting 4
   bmp280.setTimeStandby(TIME_STANDBY_2000MS);       // Set the standby time to 2 seconds
   bmp280.startNormalConversion();                   // Start BMP280 continuous conversion in NORMAL_MODE  
-
 
   //Check if the AHT20 will acknowledge
   
@@ -142,12 +139,9 @@ void loop() {
 
   }
 
-  
-
   // publish a message roughly every 10 second.
   if (millis() - lastMillis > 10000) {
     lastMillis = millis();
-    client.publish("/hello", "world");
     String msg = String(mqttTopic);
     msg.concat("/temperatur");
     char value[32];
