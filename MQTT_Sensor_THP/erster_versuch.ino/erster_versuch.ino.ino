@@ -20,8 +20,8 @@ uint8_t bmp280Flag = 0;
 
 AHT20 aht20;     
 BMP280_DEV bmp280(Wire); 
-const char ssid[] = "Dartmoor_Casa";
-const char pass[] = "SumpfSchlumpf2022";
+const char ssid[] = "***";
+const char pass[] = "***";
 
 char mqttTopic[256] = "/casa/keller/weinkeller";
 
