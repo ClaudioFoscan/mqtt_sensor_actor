@@ -26,8 +26,12 @@ MQTTClient client;
 const char ssid[] = "xxx";
 const char pass[] = "xxx";
 const char mqttBroker[] = "192.168.1.30";
-const char mqttTopic[256] = "/casa/erdgeschoss/wohnzimmer"; //casa / keller,erdgeschoss,obergeschoss,dachgeschoss
-const char HOSTNAME[] = "MQTT_SENSOR_WOHNZIMMER";
+const char mqttTopic[] = "/casa/obergeschoss/bad"; //casa / keller,erdgeschoss,obergeschoss,dachgeschoss
+const char mqttActionTopic[] = "/casa/obergeschoss/bad/action";
+const char HOSTNAME[] = "MQTT_SENSOR_BADEZIMMER";
+
+//SOFTWARE
+#define SOFTWARE_VERSION  "001.000.000"
 
 //Hardware
 #define INPUT_A 4
@@ -49,9 +53,30 @@ const char HOSTNAME[] = "MQTT_SENSOR_WOHNZIMMER";
 #define PUBLISH_CYCLE_FAST 10000   // [ms] publishes every x 10 Seconds the new Values
 #define PUBLISH_CYCLE_SLOW 600000  // [ms] publishes every 10 Minutes the new Values
 #define HEARTBEAD_RATE 1000
+#define INPUT_CHECK_RATE 100
 unsigned long lastMillis = 0;
 unsigned long publishCycle = 0;
 unsigned long lastHeartBeatMillis = 0;
+unsigned long lastInputCheckMillis = 0;
+bool statusUpdate = false;
+typedef struct {
+  bool STATECHANGE_RELAIS;
+  bool STATECHANGE_OUTPUT_A;
+  bool STATECHANGE_OUTPUT_B;
+  bool STATECHANGE_OUTPUT_C;
+  bool STATECHANGE_INPUT_A;
+  bool STATECHANGE_INPUT_B;
+  bool STATECHANGE_INPUT_C;
+  bool STATECHANGE_CONFIG_READ;
+} statusFlags_ts;
+typedef struct {
+  bool oldInputValue_A;
+  bool oldInputValue_B;
+  bool oldInputValue_C;
+} oldInputValues_ts;
+
+statusFlags_ts ioStatus;
+oldInputValues_ts oldInputValues;
 
 void connect() {
   Serial.print("checking wifi...");
@@ -61,16 +86,15 @@ void connect() {
   }
 
   Serial.print("\nconnecting...");
-  while (!client.connect("ESP32 MQTT-Sensor-Actor")) {
+  while (!client.connect(HOSTNAME)) {
     Serial.print(".");
     delay(1000);
   }
 
   Serial.println("\nconnected!");
 
-  // Example for subscribe to a topic
-  // client.subscribe("/hello");
-  // client.unsubscribe("/hello");
+  //add some Functionality for subscripted topics
+  client.subscribe(mqttActionTopic);
 }
 
 void messageReceived(String &topic, String &payload) {
@@ -80,13 +104,77 @@ void messageReceived(String &topic, String &payload) {
   // unsubscribe as it may cause deadlocks when other things arrive while
   // sending and receiving acknowledgments. Instead, change a global variable,
   // or push to a queue and handle it in the loop after calling `client.loop()`.
+  String myTopic = String(mqttActionTopic);
+  if(myTopic.equals(topic))
+  {
+    if(payload.indexOf("RELAIS_ON") != -1){
+      Serial.println("Switch Relais ON!");
+      digitalWrite(RELAIS, HIGH);
+      statusUpdate = true;
+      ioStatus.STATECHANGE_RELAIS = true;
+    }
+    if(payload.indexOf("RELAIS_OFF") != -1){
+      Serial.println("Switch Relais OFF!");
+      digitalWrite(RELAIS, LOW);
+      statusUpdate = true;
+      ioStatus.STATECHANGE_RELAIS = true;
+    }
+    if(payload.indexOf("OUTPUT_A_ON") != -1){
+      Serial.println("Switch OUTPUT_A ON!");
+      digitalWrite(OUTPUT_A, HIGH);
+      statusUpdate = true;
+      ioStatus.STATECHANGE_OUTPUT_A = true;
+    }
+    if(payload.indexOf("OUTPUT_A_OFF") != -1){
+      Serial.println("Switch OUTPUT_A OFF!");
+      digitalWrite(OUTPUT_A, LOW);
+      statusUpdate = true;
+      ioStatus.STATECHANGE_OUTPUT_A = true;
+    }
+    if(payload.indexOf("OUTPUT_B_ON") != -1){
+      Serial.println("Switch OUTPUT_B ON!");
+      digitalWrite(OUTPUT_B, HIGH);
+      statusUpdate = true;
+      ioStatus.STATECHANGE_OUTPUT_B = true;
+    }
+    if(payload.indexOf("OUTPUT_B_OFF") != -1){
+      Serial.println("Switch OUTPUT_B OFF!");
+      digitalWrite(OUTPUT_B, LOW);
+      statusUpdate = true;
+      ioStatus.STATECHANGE_OUTPUT_B = true;
+    }
+    if(payload.indexOf("OUTPUT_C_ON") != -1){
+      Serial.println("Switch OUTPUT_C ON!");
+      digitalWrite(OUTPUT_C, HIGH);
+      statusUpdate = true;
+      ioStatus.STATECHANGE_OUTPUT_C = true;
+    }
+    if(payload.indexOf("OUTPUT_C_OFF") != -1){
+      Serial.println("Switch OUTPUT_C OFF!");
+      digitalWrite(OUTPUT_C, LOW);
+      statusUpdate = true;
+      ioStatus.STATECHANGE_OUTPUT_C = true;
+    }
+    if(payload.indexOf("INPUT_UPDATE") != -1){
+      Serial.println("Upadte Input Request!");
+      statusUpdate = true;
+      ioStatus.STATECHANGE_INPUT_A = true;
+      ioStatus.STATECHANGE_INPUT_B = true;
+      ioStatus.STATECHANGE_INPUT_C = true;
+    }
+    if(payload.indexOf("CONFIG_READ") != -1){
+      Serial.println("Read Config Request!");
+      statusUpdate = true;
+      ioStatus.STATECHANGE_CONFIG_READ = true;
+    }
+  }
 }
 
 void setup() {
   //init HW
   pinMode(INPUT_A, INPUT_PULLUP);
   pinMode(INPUT_B, INPUT_PULLUP);
-  pinMode(INPUT_B, INPUT_PULLUP);
+  pinMode(INPUT_C, INPUT_PULLUP);
   pinMode(MODE_SW_1, INPUT_PULLUP);
   pinMode(MODE_SW_2, INPUT_PULLUP);
   pinMode(MODE_SW_3, INPUT_PULLUP);
@@ -151,10 +239,12 @@ void loop() {
   client.loop();
   delay(10);  // <- fixes some issues with WiFi stability
 
+  //check mqtt brocker online?
   if (!client.connected()) {
     connect();
   }
 
+  //check if new Sensor Values
   if (bmp280.getMeasurements(temperature_lres, pressure, altitude))  // Check if the measurement is complete
   {
     bmp280Flag = 1;
@@ -166,6 +256,7 @@ void loop() {
     humidity_hres = aht20.getHumidity();
   }
 
+  //if new SensorValue available print on Serial
   if (aht20Flag && bmp280Flag) {
     aht20Flag = 0;
     bmp280Flag = 0;
@@ -185,6 +276,26 @@ void loop() {
     Serial.print("% RH");
 
     Serial.println();
+  }
+
+  //input Check
+  if(millis() - lastInputCheckMillis > INPUT_CHECK_RATE ){
+    lastInputCheckMillis = millis();
+    if(digitalRead(INPUT_A) != oldInputValues.oldInputValue_A){
+      oldInputValues.oldInputValue_A = digitalRead(INPUT_A);
+      statusUpdate = true;
+      ioStatus.STATECHANGE_INPUT_A = true;
+    }
+    if(digitalRead(INPUT_B) != oldInputValues.oldInputValue_B){
+      oldInputValues.oldInputValue_B = digitalRead(INPUT_B);
+      statusUpdate = true;
+      ioStatus.STATECHANGE_INPUT_B = true;
+    }
+    if(digitalRead(INPUT_C) != oldInputValues.oldInputValue_C){
+      oldInputValues.oldInputValue_C = digitalRead(INPUT_C);
+      statusUpdate = true;
+      ioStatus.STATECHANGE_INPUT_C = true;
+    }
   }
 
   //heartbeat
@@ -215,5 +326,114 @@ void loop() {
     msg.concat(mqttTopic);
     msg.concat("/pressure");
     client.publish(msg.c_str(), value, true, 0);
+    Serial.printf("MQTT Message sent @ %d ms\r\n", lastMillis);
   }
+
+  if(statusUpdate)
+  {
+    String msg = String(mqttTopic);
+
+    if(ioStatus.STATECHANGE_RELAIS) {
+      msg.clear();
+      msg.concat(mqttTopic);
+      if(digitalRead(RELAIS) == HIGH){
+        client.publish(msg.c_str(), "RELAIS_ON", true,0);
+        Serial.printf("MQTT Status RELAIS_ON sent @ %d ms\r\n", lastMillis);
+      }
+      else {
+        client.publish(msg.c_str(), "RELAIS_OFF", true,0);
+        Serial.printf("MQTT Status RELAIS_OFF sent @ %d ms\r\n", lastMillis);
+      }
+      ioStatus.STATECHANGE_RELAIS = false;
+    }
+    if(ioStatus.STATECHANGE_OUTPUT_A) {
+      msg.clear();
+      msg.concat(mqttTopic);
+      if(digitalRead(OUTPUT_A) == HIGH){
+        client.publish(msg.c_str(), "OUTPUT_A_ON", true,0);
+        Serial.printf("MQTT Status OUTPUT_A_ON sent @ %d ms\r\n", lastMillis);
+      }
+      else {
+        client.publish(msg.c_str(), "OUTPUT_A_OFF", true,0);
+        Serial.printf("MQTT Status OUTPUT_A_OFF sent @ %d ms\r\n", lastMillis);
+      }
+      ioStatus.STATECHANGE_OUTPUT_A = false;
+    }
+    if(ioStatus.STATECHANGE_OUTPUT_B) {
+      msg.clear();
+      msg.concat(mqttTopic);
+      if(digitalRead(OUTPUT_B) == HIGH){
+        client.publish(msg.c_str(), "OUTPUT_B_ON", true,0);
+        Serial.printf("MQTT Status OUTPUT_B_ON sent @ %d ms\r\n", lastMillis);
+      }
+      else {
+        client.publish(msg.c_str(), "OUTPUT_B_OFF", true,0);
+        Serial.printf("MQTT Status OUTPUT_B_OFF sent @ %d ms\r\n", lastMillis);
+      }
+      ioStatus.STATECHANGE_OUTPUT_B = false;
+    }
+    if(ioStatus.STATECHANGE_OUTPUT_C) {
+      msg.clear();
+      msg.concat(mqttTopic);
+      if(digitalRead(OUTPUT_C) == HIGH){
+        client.publish(msg.c_str(), "OUTPUT_C_ON", true,0);
+        Serial.printf("MQTT Status OUTPUT_C_ON sent @ %d ms\r\n", lastMillis);
+      }
+      else {
+        client.publish(msg.c_str(), "OUTPUT_C_OFF", true,0);
+        Serial.printf("MQTT Status OUTPUT_C_OFF sent @ %d ms\r\n", lastMillis);
+      }
+      ioStatus.STATECHANGE_OUTPUT_C = false;
+    }
+    if(ioStatus.STATECHANGE_INPUT_A) {
+      msg.clear();
+      msg.concat(mqttTopic);
+      if(digitalRead(INPUT_A) == HIGH){
+        client.publish(msg.c_str(), "INPUT_A_ON", true,0);
+        Serial.printf("MQTT Status INPUT_A_ON sent @ %d ms\r\n", lastMillis);
+      }
+      else {
+        client.publish(msg.c_str(), "INPUT_A_OFF", true,0);
+        Serial.printf("MQTT Status INPUT_A_OFF sent @ %d ms\r\n", lastMillis);
+      }
+      ioStatus.STATECHANGE_INPUT_A = false;
+    }
+    if(ioStatus.STATECHANGE_INPUT_B) {
+      msg.clear();
+      msg.concat(mqttTopic);
+      if(digitalRead(INPUT_B) == HIGH){
+        client.publish(msg.c_str(), "INPUT_B_ON", true,0);
+        Serial.printf("MQTT Status INPUT_B_ON sent @ %d ms\r\n", lastMillis);
+      }
+      else {
+        client.publish(msg.c_str(), "INPUT_B_OFF", true,0);
+        Serial.printf("MQTT Status INPUT_B_OFF sent @ %d ms\r\n", lastMillis);
+      }
+      ioStatus.STATECHANGE_INPUT_B = false;
+    }
+    if(ioStatus.STATECHANGE_INPUT_C) {
+      msg.clear();
+      msg.concat(mqttTopic);
+      if(digitalRead(INPUT_C) == HIGH){
+        client.publish(msg.c_str(), "INPUT_C_ON", true,0);
+        Serial.printf("MQTT Status INPUT_C_ON sent @ %d ms\r\n", lastMillis);
+      }
+      else {
+        client.publish(msg.c_str(), "INPUT_C_OFF", true,0);
+        Serial.printf("MQTT Status INPUT_C_OFF sent @ %d ms\r\n", lastMillis);
+      }
+      ioStatus.STATECHANGE_INPUT_C = false;
+    }
+    if(ioStatus.STATECHANGE_CONFIG_READ) {
+      msg.clear();
+      msg.concat(mqttTopic);
+      char value[128];
+      sprintf(value, "SW:%s, SW_4:%s, SW_3:%s, SW_2:%s, SW_1:%s", SOFTWARE_VERSION, digitalRead(MODE_SW_4)?"OFF":"ON", digitalRead(MODE_SW_3)?"OFF":"ON", digitalRead(MODE_SW_2)?"OFF":"ON", digitalRead(MODE_SW_1)?"OFF":"ON");
+      Serial.printf("MQTT Config sent: %s\r\n", value);
+      client.publish(msg.c_str(), value, true,0);
+      ioStatus.STATECHANGE_CONFIG_READ = false;
+    }
+    statusUpdate = false;
+  }
+
 }
