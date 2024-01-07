@@ -1,7 +1,11 @@
 # mqtt_sensor_actor
 an MQTT based Sensor and Actor Plattform for Smarthomes
 
-SensorBoard HW01 has the following Features:
+SensorBoard V01 has the following Features:
+
+- ESP32 Dev Board, AHT20&BMP280 Board
+
+SensorBoard V02 has the following Features:
 
 - Powersuppy by 85-265VAC 50/60Hz
 - Wifi Interface
