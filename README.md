@@ -3,17 +3,19 @@ an MQTT based Sensor and Actor Plattform for Smarthomes
 
 SensorBoard V01 has the following Features:
 
-- ESP32 Dev Board, AHT20&BMP280 Board
-
-SensorBoard V02 has the following Features:
-
-- Powersuppy by 85-265VAC 50/60Hz
+- ESP32-S3 Wroom Board with integrated or external Antenna
 - Wifi Interface
-- Relais wiht 230V/10A
+- Relais with 230V/10A
 - 3 Inputs (3.3Volts Logic-Level)
 - 3 Outputs (3.3Volt Logic)
 - I2C-Sensor Interface with 3.3Volt Supply (fits aht20 & bmp280 Boards)
 - 4-Way DIP-Switch for Configurations
+
+
+SensorBoard V02 has the following Features:
+
+- Same Features as V01
+- Medical Grade Powersuppy by 85-265VAC 50/60Hz
 
 Software Features:
 
