@@ -8,6 +8,7 @@ SensorBoard V01 has the following Features:
 - Relais with 230V/10A
 - 3 Inputs (3.3Volts Logic-Level)
 - 3 Outputs (3.3Volt Logic)
+- Statusled
 - I2C-Sensor Interface with 3.3Volt Supply (fits aht20 & bmp280 Boards)
 - 4-Way DIP-Switch for Configurations
 
